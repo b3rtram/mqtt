@@ -32,14 +32,16 @@ func main() {
 
 func startRead(c net.Conn) {
 
-	header := make([]byte, 2)
+	header := make([]byte, 10)
 
 	_, err := c.Read(header)
 	if err != nil {
 		fmt.Println(err.Error())
 	}
 
-	len := header[1]
+	len, b := getVarByteInt(header[1:])
+
+	fmt.Printf("len %d b %d\n", len, b)
 
 	//Handle Connect
 	if header[0] == connect {
@@ -119,40 +121,119 @@ func startRead(c net.Conn) {
 		propLen := vhead[10]
 		fmt.Printf("properties len %d", propLen)
 
-		for i := 11; i < int(propLen)+11; i++ {
+		//Scan properties
+		m := 11
+		for i := m; i < int(propLen)+m; i++ {
 			b := vhead[i]
 
 			switch int(b) {
 			//Session Expiry Interval
 			case 17:
 				sessionExp := getUint32(vhead[i+1], vhead[i+2], vhead[i+3], vhead[i+4])
-
+				i += 4
 				fmt.Printf("session expires %d", sessionExp)
 
 			case 33:
 				//Receive Maximum
 				receiveMax := getUint16(vhead[i+1], vhead[i+2])
+				i += 2
 				fmt.Printf("receive maximum %d", receiveMax)
 
 			case 39:
 				//Maximum Packet Size
 				maxPacketSize := getUint32(vhead[i+1], vhead[i+2], vhead[i+3], vhead[i+4])
-
+				i += 4
 				fmt.Printf("maximum packet size %d", maxPacketSize)
 
 			case 34:
 				//Topic Alias Maximum
 				receiveMax := getUint16(vhead[i+1], vhead[i+2])
+				i += 4
 				fmt.Printf("receive maximum %d", receiveMax)
 
+			case 25:
+				//Request response info
+				reqResInfo := int(vhead[i+1])
+				i++
+				fmt.Printf("Request response information %d", reqResInfo)
+
+			case 23:
+				//Request Problem Information
+				reqProbInfo := int(vhead[i+1])
+				i++
+				fmt.Printf("Request Problem Information %d", reqProbInfo)
+
+			case 38:
+				unBuf := make([]byte, 2)
+				unBuf[0] = vhead[i+1]
+				unBuf[1] = vhead[i+2]
+				username := string(unBuf)
+
+				fmt.Printf("Username %s", username)
+			case 21:
+				//Authentication Extension
+				fmt.Printf("Authentication Extension")
+			case 22:
+				//Authentication Data
+				fmt.Printf("Authentication Data")
 			default:
 				fmt.Println("ERROR")
 
 			}
 
+			m = i
 		}
+
+		clientID, a := getUtf8(vhead[m:])
+		m += a
+		fmt.Printf("ClientID %s %d\n", clientID, a)
+
+		if willFlag == true {
+
+		}
+
+		if un == true {
+			username, a := getUtf8(vhead[a:])
+			fmt.Printf("username %s", username)
+			m += a
+		}
+
 	}
 
+}
+
+func getVarByteInt(bs []byte) (int, int) {
+	multiplier := 1
+	value := 0
+	a := 0
+	encodedByte := bs[a]
+	fmt.Printf("%b\n", encodedByte)
+	for (encodedByte & 128) != 0 {
+
+		value += int(encodedByte&127) * multiplier
+		if multiplier > 128*128*128 {
+			fmt.Printf("ERROR multiplier")
+		}
+
+		multiplier *= 128
+		a++
+		encodedByte = bs[a]
+	}
+
+	return value, a
+}
+
+func getUtf8(bs []byte) (string, int) {
+	len := getUint16(bs[0], bs[1])
+
+	clientID := make([]byte, len)
+	a := 0
+	for i := 0; i < int(len); i++ {
+		clientID[i] = bs[i+2]
+		a++
+	}
+
+	return string(clientID), a
 }
 
 func getUint16(b1 byte, b2 byte) uint16 {
