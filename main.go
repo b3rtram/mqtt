@@ -32,16 +32,15 @@ func main() {
 
 func startRead(c net.Conn) {
 
-	header := make([]byte, 10)
+	header := make([]byte, 2)
 
 	_, err := c.Read(header)
 	if err != nil {
 		fmt.Println(err.Error())
 	}
 
-	len, b := getVarByteInt(header[1:])
-
-	fmt.Printf("len %d b %d\n", len, b)
+	len := header[1]
+	fmt.Println(len)
 
 	//Handle Connect
 	if header[0] == connect {
@@ -50,6 +49,8 @@ func startRead(c net.Conn) {
 		if err != nil {
 			fmt.Println(err.Error())
 		}
+
+		fmt.Printf("%d", vhead)
 
 		//check variable header for correctness
 		if vhead[0] != 0 || vhead[1] != 4 || vhead[2] != 77 || vhead[3] != 81 || vhead[4] != 84 || vhead[5] != 84 {
@@ -109,13 +110,7 @@ func startRead(c net.Conn) {
 			fmt.Println("ERROR")
 		}
 
-		keepAliveBuf := make([]byte, 2)
-		keepAliveBuf[0] = vhead[8]
-		keepAliveBuf[1] = vhead[9]
-
-		//fmt.Printf("% 08b", vhead[8])
-
-		keepAlive := binary.BigEndian.Uint16(keepAliveBuf)
+		keepAlive := getUint16(vhead[8], vhead[9])
 		fmt.Printf("%d\n", keepAlive)
 
 		propLen := vhead[10]
@@ -193,9 +188,14 @@ func startRead(c net.Conn) {
 		}
 
 		if un == true {
-			username, a := getUtf8(vhead[a:])
+			username, a := getUtf8(vhead[m:])
 			fmt.Printf("username %s", username)
 			m += a
+		}
+
+		if pwd == true {
+			password, _ := getUtf8(vhead[m:])
+			fmt.Printf("username %s", password)
 		}
 
 	}
@@ -206,8 +206,18 @@ func getVarByteInt(bs []byte) (int, int) {
 	multiplier := 1
 	value := 0
 	a := 0
+
 	encodedByte := bs[a]
 	fmt.Printf("%b\n", encodedByte)
+	value += int(encodedByte&127) * multiplier
+	if multiplier > 128*128*128 {
+		fmt.Printf("ERROR multiplier")
+	}
+
+	multiplier *= 128
+	a++
+	encodedByte = bs[a]
+
 	for (encodedByte & 128) != 0 {
 
 		value += int(encodedByte&127) * multiplier
@@ -233,7 +243,7 @@ func getUtf8(bs []byte) (string, int) {
 		a++
 	}
 
-	return string(clientID), a
+	return string(clientID), a + 2
 }
 
 func getUint16(b1 byte, b2 byte) uint16 {
