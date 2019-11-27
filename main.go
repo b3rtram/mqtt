@@ -41,6 +41,7 @@ func startRead(c net.Conn) {
 
 	len := header[1]
 	fmt.Println(len)
+	c.
 
 	//Handle Connect
 	if header[0] == connect {
@@ -198,7 +199,21 @@ func startRead(c net.Conn) {
 			fmt.Printf("username %s", password)
 		}
 
+		c.Write(generateConnack())
 	}
+
+}
+
+func generateConnack() []byte {
+
+	bs := make([]byte, 4)
+
+	bs[0] = 0x10
+	bs[1] = 0x04
+	bs[2] = 0x00
+	bs[3] = 0x00
+
+	return bs
 
 }
 
