@@ -8,7 +8,8 @@ import (
 
 const (
 	// Time to wait before starting closing clients when in LD mode.
-	connect = 16
+	connect = 0x10
+	publish = 0x30
 )
 
 func main() {
@@ -34,7 +35,7 @@ func startRead(c net.Conn) {
 
 	for {
 
-		p := make([]byte, 2048)
+		p := make([]byte, 512)
 
 		_, err := c.Read(p)
 		if err != nil {
@@ -42,24 +43,36 @@ func startRead(c net.Conn) {
 			return
 		}
 
-		len := p[1]
-		fmt.Printf("%d\n", len)
+		fmt.Printf("data: % x\n", p)
+		mqttLen, read := getVarByteInt(p[1:])
+		fmt.Printf("%d\n", mqttLen)
+
+		pos := read + 1
 
 		//Handle Connect
 		if p[0] == connect {
 
-			handleConnect(p[2:])
+			handleConnect(p[pos : mqttLen+pos])
 
-			_, err := c.Write(generateConnack())
+			c.Write(generateConnack())
 
 			if err != nil {
 				fmt.Printf("write connack %s\n", err.Error())
 			}
-
 		}
 
-	}
+		if p[0] == publish {
 
+			topic, len := getUtf8(p[pos:])
+			fmt.Printf("topic: %s %d\n", topic, len)
+			pos += len
+			payLen := mqttLen - pos + 2
+
+			msg := p[pos : pos+payLen]
+			fmt.Printf("pub payload: %s\n", string(msg))
+
+		}
+	}
 }
 
 func handleConnect(vhead []byte) {
@@ -216,7 +229,7 @@ func handleConnect(vhead []byte) {
 
 func generateConnack() []byte {
 
-	bs := make([]byte, 7)
+	bs := make([]byte, 5)
 
 	bs[0] = 0x20
 	bs[1] = 0x03
