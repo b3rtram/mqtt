@@ -8,8 +8,10 @@ import (
 
 const (
 	// Time to wait before starting closing clients when in LD mode.
-	connect = 0x10
-	publish = 0x30
+	connect    = 0x10
+	publish    = 0x30
+	subscribe  = 0x82
+	disconnect = 0xe0
 )
 
 func main() {
@@ -49,9 +51,8 @@ func startRead(c net.Conn) {
 
 		pos := read + 1
 
-		//Handle Connect
-		if p[0] == connect {
-
+		switch p[0] {
+		case connect:
 			handleConnect(p[pos : mqttLen+pos])
 
 			c.Write(generateConnack())
@@ -59,10 +60,8 @@ func startRead(c net.Conn) {
 			if err != nil {
 				fmt.Printf("write connack %s\n", err.Error())
 			}
-		}
 
-		if p[0] == publish {
-
+		case publish:
 			topic, len := getUtf8(p[pos:])
 			fmt.Printf("topic: %s %d\n", topic, len)
 			pos += len
@@ -71,7 +70,44 @@ func startRead(c net.Conn) {
 			msg := p[pos : pos+payLen]
 			fmt.Printf("pub payload: %s\n", string(msg))
 
+		case subscribe:
+
+			packetID := getUint16(p[pos], p[pos+1])
+			fmt.Printf("packetID %d\n", packetID)
+			pos += 2
+			propLen := p[pos]
+			pos++
+
+			for i := 0; i < int(propLen); i++ {
+
+				b := p[pos+i]
+
+				switch int(b) {
+				case 0x0b:
+					subID, r := getVarByteInt(p)
+					fmt.Printf("subID %d %d\n", subID, r)
+					pos += r
+				case 0x26:
+					user, r := getUtf8(p)
+					fmt.Printf("user: %s\n", user)
+					pos += r
+				}
+			}
+
+			for {
+				topic, r := getUtf8(p[pos:])
+				fmt.Printf("topic: %s %d\n", topic, r)
+				pos += r + 1
+
+				if pos > mqttLen {
+					break
+				}
+			}
+
+		case disconnect:
+			fmt.Println("Disconnect")
 		}
+
 	}
 }
 
@@ -80,7 +116,7 @@ func handleConnect(vhead []byte) {
 	fmt.Printf("%s", vhead)
 
 	//check variable header for correctness
-	if vhead[0] != 0 || vhead[1] != 4 || vhead[2] != 77 || vhead[3] != 81 || vhead[4] != 84 || vhead[5] != 84 {
+	if vhead[0] != 0x00 || vhead[1] != 0x04 || vhead[2] != 0x4d || vhead[3] != 0x51 || vhead[4] != 0x54 || vhead[5] != 0x54 {
 		fmt.Println("error in CONNECT")
 	}
 
@@ -150,52 +186,52 @@ func handleConnect(vhead []byte) {
 
 		switch int(b) {
 		//Session Expiry Interval
-		case 17:
+		case 0x11:
 			sessionExp := getUint32(vhead[i+1], vhead[i+2], vhead[i+3], vhead[i+4])
 			i += 4
 			fmt.Printf("session expires %d", sessionExp)
 
-		case 33:
+		case 0x21:
 			//Receive Maximum
 			receiveMax := getUint16(vhead[i+1], vhead[i+2])
 			i += 2
 			fmt.Printf("receive maximum %d", receiveMax)
 
-		case 39:
+		case 0x27:
 			//Maximum Packet Size
 			maxPacketSize := getUint32(vhead[i+1], vhead[i+2], vhead[i+3], vhead[i+4])
 			i += 4
 			fmt.Printf("maximum packet size %d", maxPacketSize)
 
-		case 34:
+		case 0x22:
 			//Topic Alias Maximum
 			receiveMax := getUint16(vhead[i+1], vhead[i+2])
 			i += 4
 			fmt.Printf("receive maximum %d", receiveMax)
 
-		case 25:
+		case 0x19:
 			//Request response info
 			reqResInfo := int(vhead[i+1])
 			i++
 			fmt.Printf("Request response information %d", reqResInfo)
 
-		case 23:
+		case 0x17:
 			//Request Problem Information
 			reqProbInfo := int(vhead[i+1])
 			i++
 			fmt.Printf("Request Problem Information %d", reqProbInfo)
 
-		case 38:
+		case 0x26:
 			unBuf := make([]byte, 2)
 			unBuf[0] = vhead[i+1]
 			unBuf[1] = vhead[i+2]
 			username := string(unBuf)
 
 			fmt.Printf("Username %s", username)
-		case 21:
+		case 0x15:
 			//Authentication Extension
 			fmt.Printf("Authentication Extension")
-		case 22:
+		case 0x16:
 			//Authentication Data
 			fmt.Printf("Authentication Data")
 		default:
@@ -243,28 +279,19 @@ func getVarByteInt(bs []byte) (int, int) {
 	multiplier := 1
 	value := 0
 	a := 0
-
-	encodedByte := bs[a]
-	fmt.Printf("%b\n", encodedByte)
-	value += int(encodedByte&127) * multiplier
-	if multiplier > 128*128*128 {
-		fmt.Printf("ERROR multiplier")
-	}
-
-	multiplier *= 128
-	a++
-	encodedByte = bs[a]
-
-	for (encodedByte & 128) != 0 {
-
-		value += int(encodedByte&127) * multiplier
+	for {
+		encodedByte := bs[a]
+		value += (int(encodedByte) & 127) * multiplier
 		if multiplier > 128*128*128 {
-			fmt.Printf("ERROR multiplier")
+			break
 		}
 
 		multiplier *= 128
 		a++
-		encodedByte = bs[a]
+		if (encodedByte & 128) == 0 {
+			break
+		}
+
 	}
 
 	return value, a
