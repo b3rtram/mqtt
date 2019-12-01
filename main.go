@@ -11,6 +11,7 @@ const (
 	connect    = 0x10
 	publish    = 0x30
 	subscribe  = 0x82
+	suback     = 0x09
 	disconnect = 0xe0
 )
 
@@ -77,6 +78,7 @@ func startRead(c net.Conn) {
 			pos += 2
 			propLen := p[pos]
 			pos++
+			subID := 0
 
 			for i := 0; i < int(propLen); i++ {
 
@@ -84,7 +86,8 @@ func startRead(c net.Conn) {
 
 				switch int(b) {
 				case 0x0b:
-					subID, r := getVarByteInt(p)
+					var r int
+					subID, r = getVarByteInt(p)
 					fmt.Printf("subID %d %d\n", subID, r)
 					pos += r
 				case 0x26:
@@ -103,6 +106,8 @@ func startRead(c net.Conn) {
 					break
 				}
 			}
+
+			c.Write(generateSuback(subID))
 
 		case disconnect:
 			fmt.Println("Disconnect")
@@ -271,8 +276,26 @@ func generateConnack() []byte {
 	bs[1] = 0x03
 	bs[2] = 0x00
 	bs[3] = 0x00
+
 	return bs
 
+}
+
+func generateSuback(packID int) []byte {
+
+	bs := make([]byte, 6)
+
+	pi := make([]byte, 2)
+	binary.LittleEndian.PutUint16(pi, uint16(packID))
+
+	bs[0] = 0x90
+	bs[1] = 0x04
+	bs[2] = pi[0]
+	bs[3] = pi[1]
+	bs[4] = 0x00
+	bs[5] = 0x00
+
+	return bs
 }
 
 func getVarByteInt(bs []byte) (int, int) {
