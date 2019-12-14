@@ -41,9 +41,12 @@ func startRead(c net.Conn) {
 		p := make([]byte, 512)
 
 		_, err := c.Read(p)
+		//fmt.Println(k)
 		if err != nil {
+			//if err != io.EOF {
 			fmt.Println(err.Error())
 			return
+			//}
 		}
 
 		fmt.Printf("data: % x\n", p)
@@ -80,14 +83,13 @@ func startRead(c net.Conn) {
 			pos++
 			subID := 0
 
-			for i := 0; i < int(propLen); i++ {
-
+			for i := 0; i < int(propLen-1); i++ {
 				b := p[pos+i]
-
+				pos++
 				switch int(b) {
 				case 0x0b:
 					var r int
-					subID, r = getVarByteInt(p)
+					subID, r = getVarByteInt(p[pos:])
 					fmt.Printf("subID %d %d\n", subID, r)
 					pos += r
 				case 0x26:
@@ -107,10 +109,10 @@ func startRead(c net.Conn) {
 				}
 			}
 
-			c.Write(generateSuback(subID))
+			c.Write(generateSuback(packetID))
 
 		case disconnect:
-			fmt.Println("Disconnect")
+
 		}
 
 	}
@@ -281,12 +283,12 @@ func generateConnack() []byte {
 
 }
 
-func generateSuback(packID int) []byte {
+func generateSuback(packID uint16) []byte {
 
-	bs := make([]byte, 6)
+	bs := make([]byte, 7)
 
 	pi := make([]byte, 2)
-	binary.LittleEndian.PutUint16(pi, uint16(packID))
+	binary.BigEndian.PutUint16(pi, uint16(packID))
 
 	bs[0] = 0x90
 	bs[1] = 0x04
@@ -294,6 +296,7 @@ func generateSuback(packID int) []byte {
 	bs[3] = pi[1]
 	bs[4] = 0x00
 	bs[5] = 0x00
+	bs[6] = 0x87
 
 	return bs
 }
