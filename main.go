@@ -8,11 +8,12 @@ import (
 
 const (
 	// Time to wait before starting closing clients when in LD mode.
-	connect    = 0x10
-	publish    = 0x30
-	subscribe  = 0x82
-	suback     = 0x09
-	disconnect = 0xe0
+	connect     = 0x10
+	publish     = 0x30
+	subscribe   = 0x82
+	suback      = 0x09
+	unsubscribe = 0xA0
+	disconnect  = 0xe0
 )
 
 func main() {
@@ -110,6 +111,8 @@ func startRead(c net.Conn) {
 			}
 
 			c.Write(generateSuback(packetID))
+
+		case unsubscribe:
 
 		case disconnect:
 
