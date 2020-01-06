@@ -16,7 +16,7 @@ type client struct {
 }
 
 //StartRead is ...
-func startRead(c net.Conn) {
+func startRead(c net.Conn, s channels) {
 
 	for {
 
@@ -39,18 +39,26 @@ func startRead(c net.Conn) {
 				log.Fatalf("%s \n", err.Error())
 			}
 
+			//newClient := client{id: connect.ClientID, con: c}
+
 			conack := generateConnack()
 
 			c.Write(conack)
 		} else if com.Command == "Subscribe" {
 
-			_, err := mqtt.HandleSubscribe(b[pos:])
+			_, err := mqtt.HandleSubscribe(b[pos:], com.MqttLen)
 
 			if err != nil {
 				log.Fatalf("%s \n", err.Error())
 			}
 
-			log.Printf("")
+		} else if com.Command == "Publish" {
+
+			_, err := mqtt.HandlePublish(b[pos:], com.MqttLen)
+
+			if err != nil {
+				log.Fatalf("%s \n", err.Error())
+			}
 
 		}
 
