@@ -52,18 +52,18 @@ func (s Server) StartBroker() {
 	}
 }
 
-func (s Server) addClient() {
+func (s *Server) addClient() {
 	for {
 		client := <-s.chans.addClientChan
 		s.clients = append(s.clients, client)
 	}
 }
 
-func (s Server) removeClient() {
+func (s *Server) removeClient() {
 
 }
 
-func (s Server) subscribe() {
+func (s *Server) subscribe() {
 	for {
 		sub := <-s.chans.subscribeChan
 		log.Printf("%s\n", sub.subscribe.Topic[0])
@@ -72,13 +72,13 @@ func (s Server) subscribe() {
 	}
 }
 
-func (s Server) publish() {
+func (s *Server) publish() {
 	for {
 		pub := <-s.chans.publishChan
 		log.Printf("%s\n", pub.publish.Topic)
 
 		for _, e := range s.subscriptions {
-			if e.subscribe.Topic[0] == pub.publish.Topic {
+			if e.subscribe.Topic[1] == pub.publish.Topic {
 				e.pubchan <- pub
 			}
 		}

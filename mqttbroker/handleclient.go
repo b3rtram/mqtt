@@ -29,6 +29,9 @@ type publish struct {
 //StartRead is ...
 func startClient(c net.Conn, s channels) {
 	client := client{con: c}
+	pubchan := make(chan publish)
+
+	go handlePub(pubchan, &client)
 
 	for {
 
@@ -59,22 +62,39 @@ func startClient(c net.Conn, s channels) {
 
 		} else if com.Command == "Subscribe" {
 
-			_, err := mqtt.HandleSubscribe(b[pos:], com.MqttLen)
+			sub, err := mqtt.HandleSubscribe(b[pos:], com.MqttLen)
 
 			if err != nil {
 				log.Fatalf("%s \n", err.Error())
 			}
+
+			subscribe := subscribe{client: client, subscribe: sub, pubchan: pubchan}
+			s.subscribeChan <- subscribe
+
+			suback := generateSuback(sub.PacketID)
+			c.Write(suback)
 
 		} else if com.Command == "Publish" {
 
-			_, err := mqtt.HandlePublish(b[pos:], com.MqttLen)
+			p, err := mqtt.HandlePublish(b, pos, com.MqttLen)
 
 			if err != nil {
 				log.Fatalf("%s \n", err.Error())
 			}
 
+			publish := publish{client: client, publish: p}
+			s.publishChan <- publish
+
 		}
 
+	}
+}
+
+func handlePub(p chan publish, c *client) {
+	for {
+		pub := <-p
+		client := *c
+		client.con.Write(pub.publish.CompleteMsg)
 	}
 }
 
