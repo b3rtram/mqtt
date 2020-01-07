@@ -85,6 +85,11 @@ func startClient(c net.Conn, s channels) {
 			publish := publish{client: client, publish: p}
 			s.publishChan <- publish
 
+		} else if com.Command == "PingReq" {
+
+			c.Write(generatePingresp())
+
+			log.Printf("resend ping response")
 		}
 
 	}
@@ -94,7 +99,9 @@ func handlePub(p chan publish, c *client) {
 	for {
 		pub := <-p
 		client := *c
-		client.con.Write(pub.publish.CompleteMsg)
+		n, err := client.con.Write(pub.publish.CompleteMsg)
+
+		log.Printf("%d %s\n", n, err.Error())
 	}
 }
 
@@ -125,6 +132,15 @@ func generateSuback(packID uint16) []byte {
 	bs[4] = 0x00
 	bs[5] = 0x00
 	bs[6] = 0x87
+
+	return bs
+}
+
+func generatePingresp() []byte {
+	bs := make([]byte, 5)
+
+	bs[0] = 0x13
+	bs[1] = 0x00
 
 	return bs
 }
