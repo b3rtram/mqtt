@@ -10,13 +10,25 @@ import (
 )
 
 type client struct {
-	id   string
-	con  net.Conn
-	subs []string
+	id  string
+	con net.Conn
+}
+
+type subscribe struct {
+	client    client
+	subscribe mqtt.Subscribe
+	//on subscription get publish messages over that channel
+	pubchan chan publish
+}
+
+type publish struct {
+	client  client
+	publish mqtt.Publish
 }
 
 //StartRead is ...
-func startRead(c net.Conn, s channels) {
+func startClient(c net.Conn, s channels) {
+	client := client{con: c}
 
 	for {
 
@@ -33,17 +45,18 @@ func startRead(c net.Conn, s channels) {
 		fmt.Printf("command: %s\n", com.Command)
 
 		if com.Command == "Connect" {
-			_, err := mqtt.HandleConnect(b[pos:])
+			connect, err := mqtt.HandleConnect(b[pos:])
 
 			if err != nil {
 				log.Fatalf("%s \n", err.Error())
 			}
 
-			//newClient := client{id: connect.ClientID, con: c}
+			client.id = connect.ClientID
+			s.addClientChan <- client
 
 			conack := generateConnack()
-
 			c.Write(conack)
+
 		} else if com.Command == "Subscribe" {
 
 			_, err := mqtt.HandleSubscribe(b[pos:], com.MqttLen)

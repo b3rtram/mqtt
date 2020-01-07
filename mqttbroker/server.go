@@ -2,23 +2,24 @@ package mqttbroker
 
 import (
 	"fmt"
+	"log"
 	"net"
-
-	mqtt "github.com/camen6ert/mqtt_parser_go"
+	//mqtt "github.com/camen6ert/mqtt_parser_go"
 )
 
 //Server is ...
 type Server struct {
-	clients []*client
-	chans   channels
+	clients       []client
+	chans         channels
+	subscriptions []subscribe
 }
 
 type channels struct {
 	//channels
-	addClientChan   chan client
-	removeClienChan chan client
-	subscribeChan   chan mqtt.Subscribe
-	publishChan     chan mqtt.Publish
+	addClientChan    chan client
+	removeClientChan chan client
+	subscribeChan    chan subscribe
+	publishChan      chan publish
 }
 
 //StartBroker is ...
@@ -27,9 +28,9 @@ func (s Server) StartBroker() {
 	s.chans = channels{}
 
 	s.chans.addClientChan = make(chan client)
-	s.chans.removeClienChan = make(chan client)
-	s.chans.subscribeChan = make(chan mqtt.Subscribe)
-	s.chans.publishChan = make(chan mqtt.Publish)
+	s.chans.removeClientChan = make(chan client)
+	s.chans.subscribeChan = make(chan subscribe)
+	s.chans.publishChan = make(chan publish)
 
 	go s.addClient()
 	go s.removeClient()
@@ -47,22 +48,39 @@ func (s Server) StartBroker() {
 			continue
 		}
 
-		go startRead(conn, s.chans)
+		go startClient(conn, s.chans)
 	}
 }
 
-func (s Server) addClient(c chan client) {
+func (s Server) addClient() {
+	for {
+		client := <-s.chans.addClientChan
+		s.clients = append(s.clients, client)
+	}
+}
+
+func (s Server) removeClient() {
 
 }
 
-func (s Server) removeClient(c chan client) {
+func (s Server) subscribe() {
+	for {
+		sub := <-s.chans.subscribeChan
+		log.Printf("%s\n", sub.subscribe.Topic[0])
 
+		s.subscriptions = append(s.subscriptions, sub)
+	}
 }
 
-func (s Server) subscribe(c chan mqtt.Subscribe) {
+func (s Server) publish() {
+	for {
+		pub := <-s.chans.publishChan
+		log.Printf("%s\n", pub.publish.Topic)
 
-}
-
-func (s Server) publish(c chan mqtt.Publish) {
-
+		for _, e := range s.subscriptions {
+			if e.subscribe.Topic[0] == pub.publish.Topic {
+				e.pubchan <- pub
+			}
+		}
+	}
 }
