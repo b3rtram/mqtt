@@ -31,7 +31,15 @@ func startClient(c net.Conn, s channels) {
 	client := client{con: c}
 	pubchan := make(chan publish)
 
-	go handlePub(pubchan, &client)
+	go func() {
+		for {
+			pub := <-pubchan
+			n, err := pub.client.con.Write(pub.publish.CompleteMsg)
+
+			log.Printf("%s %d\n", pub.publish.Topic, n)
+			log.Println(err)
+		}
+	}()
 
 	for {
 
@@ -92,16 +100,6 @@ func startClient(c net.Conn, s channels) {
 			log.Printf("resend ping response")
 		}
 
-	}
-}
-
-func handlePub(p chan publish, c *client) {
-	for {
-		pub := <-p
-		client := *c
-		n, err := client.con.Write(pub.publish.CompleteMsg)
-
-		log.Printf("%d %s\n", n, err.Error())
 	}
 }
 

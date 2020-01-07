@@ -79,6 +79,7 @@ func (s *Server) publish() {
 
 		for _, e := range s.subscriptions {
 			if e.subscribe.Topic[1] == pub.publish.Topic {
+				pub.client = e.client
 				e.pubchan <- pub
 			}
 		}
