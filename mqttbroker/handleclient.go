@@ -11,33 +11,36 @@ import (
 
 type client struct {
 	id  string
-	con net.Conn
+	con *net.Conn
 }
 
 type subscribe struct {
-	client    client
+	client    *client
 	subscribe mqtt.Subscribe
 	//on subscription get publish messages over that channel
 	pubchan chan publish
 }
 
 type publish struct {
-	client  client
+	client  *client
 	publish mqtt.Publish
 }
 
 //StartRead is ...
 func startClient(c net.Conn, s channels) {
-	client := client{con: c}
+	client := client{con: &c}
+	subs := make(map[string]subscribe)
 	pubchan := make(chan publish)
 
 	go func() {
 		for {
 			pub := <-pubchan
-			n, err := pub.client.con.Write(pub.publish.CompleteMsg)
-
+			//tosend := generatePub(pub)
+			generatePub(pub, subs[pub.publish.Topic])
+			n, _ := c.Write(pub.publish.CompleteMsg)
+			log.Println(client)
 			log.Printf("%s %d\n", pub.publish.Topic, n)
-			log.Println(err)
+
 		}
 	}()
 
@@ -76,8 +79,9 @@ func startClient(c net.Conn, s channels) {
 				log.Fatalf("%s \n", err.Error())
 			}
 
-			subscribe := subscribe{client: client, subscribe: sub, pubchan: pubchan}
+			subscribe := subscribe{client: &client, subscribe: sub, pubchan: pubchan}
 			s.subscribeChan <- subscribe
+			subs[subscribe.subscribe.Topic[1]] = subscribe
 
 			suback := generateSuback(sub.PacketID)
 			c.Write(suback)
@@ -90,7 +94,7 @@ func startClient(c net.Conn, s channels) {
 				log.Fatalf("%s \n", err.Error())
 			}
 
-			publish := publish{client: client, publish: p}
+			publish := publish{client: &client, publish: p}
 			s.publishChan <- publish
 
 		} else if com.Command == "PingReq" {
@@ -141,4 +145,14 @@ func generatePingresp() []byte {
 	bs[1] = 0x00
 
 	return bs
+}
+
+func generatePub(p publish, s subscribe) {
+
+	bs := make([]byte, 5)
+
+	bs[0] = p.publish.CompleteMsg[0]
+	bs[1] = p.publish.CompleteMsg[1]
+	bs[2] = p.publish.CompleteMsg
+
 }
